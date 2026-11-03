@@ -61,15 +61,12 @@ DSH 的「归档」只是从侧栏消失，文件还在原地吃硬盘。这个�
 </td>
 </tr>
 <tr>
-<td width="50%" valign="top">
+<td colspan="2" valign="top">
 
 **[qunyou-xiaozhuan-CCB](https://github.com/hongdougao111/qunyou-xiaozhuan-CCB)**  
 `Python`
 
 红豆币爆仓模拟器。八种货币对、开杠杆、真的会爆仓。题材借鉴《FX战士久留美》，但角色与数值全原创。
-
-</td>
-<td width="50%" valign="top">
 
 </td>
 </tr>
