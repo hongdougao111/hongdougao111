@@ -97,18 +97,6 @@ DSH 的「归档」只是从侧栏消失，文件还在原地吃硬盘。这个�
 
 ---
 
-## 🐍 蛇的贡献
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/snake-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="assets/snake.svg" />
-    <img alt="贪吃蛇吃贡献格" src="assets/snake.svg" width="100%" />
-  </picture>
-</p>
-
----
-
 **我在意的事**
 
 - 插件的 README 要写清「它救你于什么水火」，不是只列功能
