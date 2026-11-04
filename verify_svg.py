@@ -27,8 +27,17 @@ MUTED = (0x7A, 0x8C, 0xA6)
 
 
 def load_font(size, bold=False):
-    for p in ([r"C:\Windows\Fonts\msyhbd.ttc", r"C:\Windows\Fonts\segoeuib.ttf"]
-              if bold else [r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\segoeui.ttf"]):
+    """按平台挑字体：Windows 用雅黑/微软雅黑，Linux CI 用 Noto/DejaVu。"""
+    win = ([r"C:\Windows\Fonts\msyhbd.ttc", r"C:\Windows\Fonts\segoeuib.ttf"]
+           if bold else [r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\segoeui.ttf"])
+    nix = [
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc" if bold
+        else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold
+        else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    for p in win + nix:
         if os.path.exists(p):
             try:
                 return ImageFont.truetype(p, size)
