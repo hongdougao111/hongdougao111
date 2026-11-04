@@ -97,17 +97,13 @@ DSH 的「归档」只是从侧栏消失，文件还在原地吃硬盘。这个�
 
 ---
 
-## 🌱 GitHub 日常
-
-<p align="center">
-  <img src="./metrics.plugin.isocalendar.svg" alt="近一年 GitHub 贡献日历" width="520" />
-</p>
+## 🐍 蛇的贡献
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/hongdougao111/hongdougao111/output/github-contribution-grid-snake-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/hongdougao111/hongdougao111/output/github-contribution-grid-snake.svg" />
-    <img alt="贡献记录动画" src="https://raw.githubusercontent.com/hongdougao111/hongdougao111/output/github-contribution-grid-snake.svg" width="100%" />
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snake-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="assets/snake.svg" />
+    <img alt="贪吃蛇吃贡献格" src="assets/snake.svg" width="100%" />
   </picture>
 </p>
 
