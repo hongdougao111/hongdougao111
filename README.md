@@ -88,6 +88,15 @@ DSH 的「归档」只是从侧栏消失，文件还在原地吃硬盘。这个�
 
 ---
 
+## 📊 数据
+
+<p align="center">
+  <img src="assets/stats.svg" alt="GitHub 统计" height="210" />
+  <img src="assets/langs.svg" alt="常用语言" height="210" />
+</p>
+
+---
+
 **我在意的事**
 
 - 插件的 README 要写清「它救你于什么水火」，不是只列功能
