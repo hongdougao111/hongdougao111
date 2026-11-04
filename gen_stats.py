@@ -1,20 +1,29 @@
 # -*- coding: utf-8 -*-
 """从 GitHub 拉取真实数据，生成风格统一的统计卡片 SVG。
 
-不依赖任何第三方图片服务（github-readme-stats 主站当前返回 503）。
-数据源走本机已登录的 gh CLI，避开未认证 API 的限流；
-生成的 SVG 直接提交进仓库，由 GitHub 原生渲染。
+不依赖任何第三方图片服务（github-readme-stats 主站当前返回 503，
+trophy / activity-graph 返回 402），生成的 SVG 直接提交进仓库由 GitHub 原生渲染。
+
+两种认证方式，按可用性自动选择：
+  1. GITHUB_TOKEN / GH_TOKEN 环境变量（GitHub Actions 里用 GITHUB_TOKEN）
+  2. 本机已登录的 gh CLI（沙箱里禁止建管道，故用临时文件承接输出）
 """
 import json
 import os
 import subprocess
+import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
 
-USER = "hongdougao111"
+USER = os.environ.get("STATS_USER", "hongdougao111")
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "assets")
 
-GH = os.environ.get("GH_BIN", r"E:\Apps\GitHub CLI\bin\gh.exe")
-GH_HOME = os.environ.get("GH_HOME", r"C:\Users\褚富兴")
+# 本地 Windows 用绝对路径；CI (Linux) 里退化为 PATH 中的 gh
+GH = os.environ.get("GH_BIN") or ("gh" if os.name != "nt" else r"E:\Apps\GitHub CLI\bin\gh.exe")
+GH_HOME = os.environ.get("GH_HOME", os.path.expanduser("~"))
 
 # 与 banner 一致的配色
 BG_TOP = "#0C1022"
@@ -24,40 +33,81 @@ ACCENT2 = "#7DD3FC"
 TEXT = "#C6DEF5"
 MUTED = "#7A8CA6"
 
-OUT_FILE = os.path.join(HERE, "_gh_out.txt")
-ERR_FILE = os.path.join(HERE, "_gh_err.txt")
+TOKEN = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
 
 
-def gh_json(args):
-    """调用 gh，用临时文件接管输出（沙箱不允许建管道）。"""
+# ---------------------------------------------------------------- 数据层
+
+def _gh(args):
+    """调用 gh CLI。沙箱禁止建管道，所以用临时文件接管输出。"""
     env = dict(os.environ)
     env["HOME"] = GH_HOME
     env["MSYS2_ARG_CONV_EXCL"] = "*"
-    with open(OUT_FILE, "w+", encoding="utf-8", errors="replace") as fo, \
-         open(ERR_FILE, "w+", encoding="utf-8", errors="replace") as fe:
-        proc = subprocess.run([GH] + args, stdout=fo, stderr=fe, text=True, env=env)
-        fo.seek(0)
-        out = fo.read()
-        fe.seek(0)
-        err = fe.read()
-    if proc.returncode != 0:
-        raise RuntimeError("gh failed: %s\n%s" % (" ".join(args[:3]), (out + err)[:400]))
-    return json.loads(out) if out.strip() else None
-
-
-def search_count(q):
-    """统计搜索命中数。q 里的空格必须编码成 %20，否则 GitHub 返回 422。"""
+    fd, out_path = tempfile.mkstemp(suffix=".out", dir=HERE)
+    os.close(fd)
+    fd, err_path = tempfile.mkstemp(suffix=".err", dir=HERE)
+    os.close(fd)
     try:
-        data = gh_json(["api", "search/issues?q=%s&per_page=1" % q.replace(" ", "%20")])
+        with open(out_path, "w+", encoding="utf-8", errors="replace") as fo, \
+             open(err_path, "w+", encoding="utf-8", errors="replace") as fe:
+            proc = subprocess.run([GH] + args, stdout=fo, stderr=fe, text=True, env=env)
+            fo.seek(0)
+            out = fo.read()
+            fe.seek(0)
+            err = fe.read()
+    finally:
+        for p in (out_path, err_path):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+    if proc.returncode != 0:
+        raise RuntimeError("gh failed: %s\n%s" % (" ".join(args[:3]), (out + err)[:300]))
+    return out
+
+
+def _http(path_or_url, data=None):
+    url = path_or_url if path_or_url.startswith("http") else "https://api.github.com" + path_or_url
+    req = urllib.request.Request(url, data=data, headers={
+        "User-Agent": "readme-stats",
+        "Accept": "application/vnd.github+json",
+    })
+    if TOKEN:
+        req.add_header("Authorization", "Bearer " + TOKEN)
+    if data is not None:
+        req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=40) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def api(path):
+    """REST GET。有 token 走 HTTP，否则走 gh CLI。"""
+    if TOKEN:
+        return _http(path)
+    raw = _gh(["api", path.lstrip("/")])
+    return json.loads(raw) if raw.strip() else None
+
+
+def graphql(query):
+    if TOKEN:
+        return _http("/graphql", data=json.dumps({"query": query}).encode("utf-8"))
+    raw = _gh(["api", "graphql", "-f", "query=" + query])
+    return json.loads(raw) if raw.strip() else None
+
+
+def search_count(q, kind="issues"):
+    """搜索命中数。空格必须编码成 %20，否则 GitHub 返回 422。"""
+    try:
+        data = api("/search/%s?q=%s&per_page=1" % (kind, urllib.parse.quote(q, safe=":")))
         return data.get("total_count", 0)
     except Exception as exc:
-        print("warn: search_count(%r) failed: %s" % (q, str(exc)[:120]))
+        print("warn: search %r failed: %s" % (q, str(exc)[:120]))
         return 0
 
 
 def fetch():
-    user = gh_json(["api", "users/" + USER])
-    repos = gh_json(["api", "users/%s/repos?per_page=100&sort=pushed" % USER]) or []
+    user = api("/users/" + USER)
+    repos = api("/users/%s/repos?per_page=100&sort=pushed" % USER) or []
     own = [r for r in repos if not r["fork"] and not r.get("archived")]
     total_stars = sum(r["stargazers_count"] for r in repos)
 
@@ -67,29 +117,45 @@ def fetch():
         if not r.get("language"):
             continue
         try:
-            langs = gh_json(["api", "repos/%s/%s/languages" % (USER, r["name"])])
+            langs = api("/repos/%s/%s/languages" % (USER, r["name"])) or {}
         except Exception:
             continue
-        for k, v in (langs or {}).items():
+        for k, v in langs.items():
             lang_bytes[k] = lang_bytes.get(k, 0) + v
-
     total_bytes = sum(lang_bytes.values()) or 1
     top_langs = sorted(lang_bytes.items(), key=lambda kv: -kv[1])[:5]
 
-    from datetime import datetime, timezone
+    # 累计 commit（公开仓库）
+    total_commits = search_count("author:%s is:public" % USER, kind="commits")
+
+    # 近一年贡献（GraphQL 更准，失败则退回 0）
+    year_commits = 0
+    try:
+        gql = graphql(
+            'query{user(login:"%s"){contributionsCollection{'
+            'totalCommitContributions totalPullRequestContributions'
+            ' totalIssueContributions}}}' % USER)
+        cc = gql["data"]["user"]["contributionsCollection"]
+        year_commits = cc.get("totalCommitContributions", 0)
+    except Exception as exc:
+        print("warn: graphql contributions failed: %s" % str(exc)[:120])
+
     return {
         "name": user.get("name") or USER,
         "login": user["login"],
         "public_repos": user["public_repos"],
         "followers": user["followers"],
         "stars": total_stars,
+        "commits": total_commits,
+        "year_commits": year_commits,
         "prs": search_count("author:%s type:pr" % USER),
         "issues": search_count("author:%s type:issue" % USER),
         "langs": [(k, v / total_bytes * 100) for k, v in top_langs],
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "own_repos": len(own),
     }
 
+
+# ---------------------------------------------------------------- 绘制层
 
 def esc(s):
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -110,7 +176,6 @@ def defs(w, h):
 
 
 def frame(w, h, title):
-    """卡片外壳：渐变底 + 底部强调条 + 描边 + 标题。"""
     return [
         '<g clip-path="url(#card)">',
         '  <rect x="0.5" y="0.5" width="%d" height="%d" rx="14" fill="url(#bg)"/>' % (w - 1, h - 1),
@@ -125,17 +190,24 @@ def frame(w, h, title):
 
 def stats_svg(d):
     w, h = 460, 210
-    nums = [("Stars", d["stars"]), ("Repos", d["public_repos"]),
-            ("PRs", d["prs"]), ("Issues", d["issues"]), ("Followers", d["followers"])]
+    nums = [
+        ("Commits", d["commits"]),
+        ("Stars", d["stars"]),
+        ("Repos", d["public_repos"]),
+        ("PRs", d["prs"]),
+        ("Issues", d["issues"]),
+        ("Followers", d["followers"]),
+    ]
     p = ['<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" '
          'role="img" aria-label="%s 的 GitHub 统计">' % (w, h, w, h, esc(d["name"])),
          defs(w, h)]
     p += frame(w, h, "%s 的 GitHub 统计" % d["name"])
     p.append('<text x="26" y="64" font-family="Segoe UI,sans-serif" font-size="12" '
-             'fill="%s">@%s</text>' % (MUTED, esc(d["login"])))
+             'fill="%s">@%s · 近一年 %s commits</text>'
+             % (MUTED, esc(d["login"]), d["year_commits"]))
     for i, (label, val) in enumerate(nums):
         x = 26 + (i % 3) * 145
-        y = 108 + (i // 3) * 54
+        y = 106 + (i // 3) * 54
         p.append('<text x="%d" y="%d" font-family="Segoe UI,Microsoft YaHei,sans-serif" '
                  'font-size="25" font-weight="700" fill="%s">%s</text>' % (x, y, ACCENT2, val))
         p.append('<text x="%d" y="%d" font-family="Segoe UI,Microsoft YaHei,sans-serif" '
@@ -173,13 +245,9 @@ def main():
     data = fetch()
     os.makedirs(ASSETS, exist_ok=True)
     for fname, svg in (("stats.svg", stats_svg(data)), ("langs.svg", langs_svg(data))):
-        path = os.path.join(ASSETS, fname)
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
+        with open(os.path.join(ASSETS, fname), "w", encoding="utf-8", newline="\n") as f:
             f.write(svg)
         print("wrote", fname, len(svg), "bytes")
-    for tmp in (OUT_FILE, ERR_FILE):
-        if os.path.exists(tmp):
-            os.remove(tmp)
     print(json.dumps({k: v for k, v in data.items() if k != "langs"}, ensure_ascii=False))
 
 
