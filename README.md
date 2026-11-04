@@ -97,6 +97,22 @@ DSH 的「归档」只是从侧栏消失，文件还在原地吃硬盘。这个�
 
 ---
 
+## 🌱 GitHub 日常
+
+<p align="center">
+  <img src="./metrics.plugin.isocalendar.svg" alt="近一年 GitHub 贡献日历" width="520" />
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/hongdougao111/hongdougao111/output/github-contribution-grid-snake-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/hongdougao111/hongdougao111/output/github-contribution-grid-snake.svg" />
+    <img alt="贡献记录动画" src="https://raw.githubusercontent.com/hongdougao111/hongdougao111/output/github-contribution-grid-snake.svg" width="100%" />
+  </picture>
+</p>
+
+---
+
 **我在意的事**
 
 - 插件的 README 要写清「它救你于什么水火」，不是只列功能
